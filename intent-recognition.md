@@ -123,6 +123,7 @@ The parameter extraction process follows these steps:
   - `database`: (default: "postgres|-small")
 
 **Output**:
+```json
 {
   "intent": "create_api_server",
   "confidence": 0.98,
@@ -133,6 +134,7 @@ The parameter extraction process follows these steps:
     "database": "postgresq-small"
   }
 }
+```
 
 ##  5.2 Complex Example
 
@@ -149,6 +151,7 @@ The parameter extraction process follows these steps:
   - `auto_offset_reset`: (default: "latest")
 
 **Output**:
+```json
 {
   "intent": "create_kafka_consumer",
   "confidence": 0.96,
@@ -161,6 +164,7 @@ The parameter extraction process follows these steps:
     "auto_offset_reset": "latest"
   }
 }
+```
 
 ### 5.3 Example with Clarification
 
@@ -184,6 +188,7 @@ The parameter extraction process follows these steps:
   - `size`: (default: "small")
 
 **Output**:
+```json
 {
   "intent": "create_database",
   "confidence": 0.92,
@@ -193,6 +198,7 @@ The parameter extraction process follows these steps:
     "size": "small"
   }
 }
+```
 
 ## 6. Integration with Other Components
 
