@@ -94,19 +94,19 @@ The system handles various parameter types:
 
 The parameter extraction process follows these steps:
 
-1> **Schema Selection**: Based on the recognized intent, select the appropriate parameter schema.
+1. **Schema Selection**: Based on the recognized intent, select the appropriate parameter schema.
 
-2> **Entity Extraction**: Identify potential parameter values within the text.
+2. **Entity Extraction**: Identify potential parameter values within the text.
 
-3> **Entity Classification**: Classify each extracted entity according to the schema.
+3. **Entity Classification**: Classify each extracted entity according to the schema.
 
-4> **Value Normalization**: Convert extracted values to the appropriate data types.
+4. **Value Normalization**: Convert extracted values to the appropriate data types.
 
-5> **Inference and Defaults**: Apply default values for missing parameters based on context and organizational standards.
+5. **Inference and Defaults**: Apply default values for missing parameters based on context and organizational standards.
 
-6> **Validation**: Verify that all required parameters are present and that values are within acceptable ranges.
+6. **Validation**: Verify that all required parameters are present and that values are within acceptable ranges.
 
-7> **Parameter Set Construction**: Assemble the final parameter set for processing.
+7. **Parameter Set Construction**: Assemble the final parameter set for processing.
 
 ## 5. Examples
 
