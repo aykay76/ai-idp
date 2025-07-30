@@ -46,7 +46,7 @@ The system recognizes a predefined set of intents that map to available infrastr
 
 ### 3.4 Implementation Details
 
-Dhe intent recognition process follows these steps:
+The intent recognition process follows these steps:
 
 1. **Conversation Preprocessing**: Clean and normalize the input text, removing irrelevant elements.
 
