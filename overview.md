@@ -174,15 +174,6 @@ graph TB
     ATS --> CD
     CAT -.-> TPL
     MON -.-> CD
-    
-    style NLI fill:#f9f,stroke:#333,stroke-width:2px
-    style IRPE fill:#f9f,stroke:#333,stroke-width:2px
-    style MCP fill:#f9f,stroke:#333,stroke-width:2px
-    style TPL fill:#f9f,stroke:#333,stroke-width:2px
-    style DSR fill:#f9f,stroke:#333,stroke-width:2px
-    style GPE fill:#f9f,stroke:#333,stroke-width:2px
-    style IaC fill:#f9f,stroke:#333,stroke-width:2px
-    style ATS fill:#f9f,stroke:#333,stroke-width:2px
 ```
 
 ### 5.3 Integration Benefits
