@@ -138,7 +138,7 @@ The parameter extraction process follows these steps:
 
 ##  5.2 Complex Example
 
-**User Input**: "I need a Kafka consumer that processes orders from the orders topic. It should connect to our production Kafka cluster and use the Java runtime. Name it order-processor."
+**User Input**: "I need a Kafka consumer that processes orders from the `orders` topic. It should connect to our production Kafka cluster and use the Java runtime. Name it `order-processor`."
 
 **Processing**:
 - **Intent Recognition**: `create_kafka_consumer` (confidence: 0.96)
