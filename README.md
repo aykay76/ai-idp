@@ -6,9 +6,8 @@ A next-generation Internal Developer Platform that combines AI-driven infrastruc
 
 ### Prerequisites
 
-- **Go 1.21+** - Backend services
-- **Node.js 18+** - Frontend tooling  
-- **Docker & Docker Compose** - Local development
+- **Go 1.23+** - Backend services
+- **Podman & Podman Compose** - Local development
 - **PostgreSQL client tools** - Database access (optional)
 
 ### Initial Setup
@@ -21,16 +20,17 @@ cd ai-idp
 # Initial setup (installs dependencies, starts infrastructure, runs migrations)
 make setup
 
-# Start all services for development
-make dev
+# Start backend services
+make dev-services
 ```
 
-After setup completes, the platform will be available at:
-- **API Gateway**: http://localhost:8080
-- **Application Service**: http://localhost:8081  
+After setup completes, the backend will be available at:
+- **Application Service**: http://localhost:8081 (REST API + health checks)
 - **PostgreSQL**: localhost:5432 (platform/platform_dev_password)
 - **Redis**: localhost:6379 (redis_dev_password)
 - **MinIO Console**: http://localhost:9001 (minioadmin/minioadmin123)
+
+> **Note**: This is currently a **backend-only implementation**. The frontend UI and API Gateway are planned for future phases.
 
 ### Development Workflow
 
@@ -38,18 +38,17 @@ After setup completes, the platform will be available at:
 # Quick start for returning developers
 make quick-start
 
-# Start specific components
-make dev-services    # Backend services only
-make dev-web        # Frontend development server
+# Start backend services
+make dev-services    # Backend services + infrastructure
 
 # Run tests
 make test           # All tests
-make test-unit      # Unit tests only
+make test-unit      # Unit tests only  
 make test-integration # Integration tests (requires DB)
 
 # Code quality
-make lint           # Run linters
-make fmt            # Format code
+make lint           # Run Go linters and formatters
+make fmt            # Format Go code
 
 # Database operations
 make migrate        # Run migrations
@@ -59,9 +58,11 @@ make db-shell       # Open PostgreSQL shell
 # Utilities
 make logs           # View all service logs
 make status         # Check service status
-make health         # Health check all services
+make health         # Health check services
 make clean          # Stop and clean up
 ```
+
+> **Simplified Setup**: Since this is currently backend-only, you only need `make setup` followed by `make dev-services` to get started!
 
 ## 🏗️ Architecture Overview
 

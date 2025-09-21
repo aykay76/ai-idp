@@ -14,7 +14,7 @@ setup: ## Initial project setup - install dependencies and initialize database
 	@echo "🚀 Setting up AI-IDP development environment..."
 	@go mod download
 	@make deps
-	@docker-compose up -d postgres redis minio
+	@podman-compose up -d postgres redis minio
 	@sleep 10  # Wait for PostgreSQL to be ready
 	@make migrate-up
 	@echo "✅ Setup completed! Run 'make dev' to start development."
@@ -23,47 +23,47 @@ deps: ## Install/update all dependencies
 	@echo "📦 Installing dependencies..."
 	@go mod tidy
 	@go mod download
-	@if [ -d "web" ]; then cd web && npm install; fi
+	@echo "📝 Note: Frontend dependencies will be installed when web directory is created"
 
 # Development Servers
 dev: ## Start all services for full development (infrastructure + services)
 	@echo "🔧 Starting full development environment..."
-	@docker-compose up -d postgres redis minio
+	@podman-compose up -d postgres redis minio
 	@sleep 5
 	@make migrate-up
-	@docker-compose --profile services up --build
+	@podman-compose --profile services up --build
 
 dev-services: ## Start only backend services (API Gateway + microservices)
 	@echo "🔧 Starting backend services..."
-	@docker-compose up -d postgres redis minio
+	@podman-compose up -d postgres redis minio
 	@sleep 5
 	@make migrate-up
-	@docker-compose --profile services up --build api-gateway application-service team-service
+	@podman-compose --profile services up --build api-gateway application-service team-service
 
 dev-web: ## Start only frontend development server
 	@echo "🎨 Starting frontend development server..."
-	@docker-compose --profile web up web-dev
+	@podman-compose --profile web up web-dev
 
 dev-infrastructure: ## Start only infrastructure services (DB, Redis, MinIO)
 	@echo "🏗️  Starting infrastructure services..."
-	@docker-compose up -d postgres redis minio
+	@podman-compose up -d postgres redis minio
 
 # Database Management
 migrate: migrate-up ## Alias for migrate-up
 
 migrate-up: ## Run database migrations (up)
 	@echo "📊 Running database migrations up..."
-	@docker-compose run --rm migrate
+	@podman-compose run --rm migrate
 
 migrate-down: ## Rollback last database migration
 	@echo "📊 Rolling back database migrations..."
-	@docker-compose run --rm migrate -path /migrations -database "postgres://platform:platform_dev_password@postgres:5432/platform?sslmode=disable" down 1
+	@podman-compose run --rm migrate -path /migrations -database "postgres://platform:platform_dev_password@postgres:5432/platform?sslmode=disable" down 1
 
 migrate-reset: ## Reset database (drop and recreate with migrations)
 	@echo "🔄 Resetting database..."
-	@docker-compose down postgres
-	@docker volume rm ai-idp_postgres_data || true
-	@docker-compose up -d postgres
+	@podman-compose down postgres
+	@podman volume rm ai-idp_postgres_data || true
+	@podman-compose up -d postgres
 	@sleep 10
 	@make migrate-up
 
@@ -84,7 +84,7 @@ test-unit: ## Run unit tests
 
 test-integration: ## Run integration tests (requires running infrastructure)
 	@echo "🔗 Running integration tests..."
-	@docker-compose up -d postgres redis minio
+	@podman-compose up -d postgres redis minio
 	@sleep 10
 	@make migrate-up
 	@go test -v -race -tags=integration ./tests/...
@@ -101,7 +101,7 @@ lint: ## Run linters and formatters
 	@go fmt ./...
 	@go vet ./...
 	@golangci-lint run || echo "⚠️  Install golangci-lint for complete linting"
-	@if [ -d "web" ]; then cd web && npm run lint; fi
+	@echo "📝 Note: Frontend linting will be available when web directory is created"
 
 fmt: ## Format code
 	@echo "✨ Formatting code..."
@@ -118,41 +118,41 @@ build: ## Build all binaries
 	@go build -o bin/github-provider ./cmd/github-provider
 	@echo "✅ Binaries built in ./bin/"
 
-docker-build: ## Build all Docker images
-	@echo "🐳 Building Docker images..."
-	@docker-compose build
+podman-build: ## Build all Podman images
+	@echo "🐳 Building Podman images..."
+	@podman-compose build
 
 # Development Utilities
 logs: ## Show logs from all services
-	@docker-compose logs -f
+	@podman-compose logs -f
 
 logs-api: ## Show API Gateway logs
-	@docker-compose logs -f api-gateway
+	@podman-compose logs -f api-gateway
 
 logs-db: ## Show database logs  
-	@docker-compose logs -f postgres
+	@podman-compose logs -f postgres
 
 shell: ## Open shell in development container
-	@docker-compose --profile dev run --rm dev-tools sh
+	@podman-compose --profile dev run --rm dev-tools sh
 
 db-shell: ## Open PostgreSQL shell
-	@docker-compose exec postgres psql -U platform -d platform
+	@podman-compose exec postgres psql -U platform -d platform
 
 redis-shell: ## Open Redis CLI
-	@docker-compose exec redis redis-cli -a redis_dev_password
+	@podman-compose exec redis redis-cli -a redis_dev_password
 
 # Cleanup
 clean: ## Stop all services and clean up
 	@echo "🧹 Cleaning up development environment..."
-	@docker-compose down
-	@docker system prune -f
+	@podman-compose down
+	@podman system prune -f
 
 clean-data: ## Clean up including persistent data (⚠️  destroys all data)
 	@echo "🗑️  Cleaning up data volumes (this will destroy all data)..."
 	@read -p "Are you sure? [y/N] " -n 1 -r; \
 	if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
-		docker-compose down -v; \
-		docker volume prune -f; \
+		podman-compose down -v; \
+		podman volume prune -f; \
 		echo "✅ Data cleaned up"; \
 	else \
 		echo "❌ Aborted"; \
@@ -161,15 +161,15 @@ clean-data: ## Clean up including persistent data (⚠️  destroys all data)
 # Status and Info
 status: ## Show status of all services
 	@echo "📊 Service Status:"
-	@docker-compose ps
+	@podman-compose ps
 
 health: ## Check health of all services
 	@echo "🏥 Health Check:"
 	@curl -f http://localhost:8080/health 2>/dev/null && echo "✅ API Gateway: healthy" || echo "❌ API Gateway: unhealthy"
 	@curl -f http://localhost:8081/health 2>/dev/null && echo "✅ Application Service: healthy" || echo "❌ Application Service: unhealthy"
 	@curl -f http://localhost:8082/health 2>/dev/null && echo "✅ Team Service: healthy" || echo "❌ Team Service: unhealthy"
-	@docker-compose exec -T postgres pg_isready -U platform -d platform && echo "✅ PostgreSQL: healthy" || echo "❌ PostgreSQL: unhealthy"
-	@docker-compose exec -T redis redis-cli -a redis_dev_password ping && echo "✅ Redis: healthy" || echo "❌ Redis: unhealthy"
+	@podman-compose exec -T postgres pg_isready -U platform -d platform && echo "✅ PostgreSQL: healthy" || echo "❌ PostgreSQL: unhealthy"
+	@podman-compose exec -T redis redis-cli -a redis_dev_password ping && echo "✅ Redis: healthy" || echo "❌ Redis: unhealthy"
 
 info: ## Show development environment information
 	@echo "ℹ️  AI-IDP Development Environment"
@@ -202,15 +202,15 @@ tidy: ## Tidy up go modules and format
 	@go mod tidy
 	@make fmt
 
-# Docker development workflow
-docker-dev: ## Run development in Docker containers (full isolation)
-	@echo "🐳 Starting dockerized development..."
-	@docker-compose --profile dev --profile services --profile web up --build
+# Podman development workflow
+podman-dev: ## Run development in Podman containers (full isolation)
+	@echo "🐳 Starting containerized development..."
+	@podman-compose --profile dev --profile services --profile web up --build
 
 # Quick development commands
 quick-start: ## Quick start for returning developers (assumes setup done)
 	@echo "⚡ Quick starting development environment..."
-	@docker-compose up -d postgres redis minio
+	@podman-compose up -d postgres redis minio
 	@sleep 3
 	@make migrate-up
 	@echo "✅ Infrastructure ready! Use 'make dev-services' for backend or 'make dev-web' for frontend."
