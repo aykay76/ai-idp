@@ -1,0 +1,260 @@
+version: '3.8'
+
+services:
+  # PostgreSQL - Platform database
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: platform
+      POSTGRES_PASSWORD: platform_dev_password
+      POSTGRES_DB: platform
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sh:/docker-entrypoint-initdb.d/init-db.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U platform -d platform"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - platform
+
+  # Redis - Caching and session management
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes --requirepass redis_dev_password
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - platform
+
+  # MinIO - S3-compatible storage for development
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin123
+    ports:
+      - "9000:9000"  # API port
+      - "9001:9001"  # Console port
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    networks:
+      - platform
+
+  # API Gateway - Main entry point
+  api-gateway:
+    build:
+      context: .
+      dockerfile: cmd/api-gateway/Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      # Database configuration
+      DATABASE_URL: "postgres://platform:platform_dev_password@postgres:5432/platform?sslmode=disable"
+      
+      # Redis configuration
+      REDIS_URL: "redis://:redis_dev_password@redis:6379/0"
+      
+      # JWT configuration
+      JWT_SECRET: "dev_jwt_secret_change_in_production"
+      JWT_ISSUER: "ai-idp-dev"
+      JWT_EXPIRY: "24h"
+      
+      # Service URLs
+      APPLICATION_SERVICE_URL: "http://application-service:8081"
+      TEAM_SERVICE_URL: "http://team-service:8082"
+      GITHUB_PROVIDER_URL: "http://github-provider:8083"
+      
+      # CORS configuration
+      CORS_ORIGINS: "http://localhost:3000,http://localhost:5173"
+      
+      # Development flags
+      DEBUG: "true"
+      LOG_LEVEL: "debug"
+      ENVIRONMENT: "development"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - platform
+    profiles:
+      - services
+
+  # Application Service - Application CRUD operations
+  application-service:
+    build:
+      context: .
+      dockerfile: cmd/application-service/Dockerfile
+    ports:
+      - "8081:8081"
+    environment:
+      # Database configuration  
+      DATABASE_URL: "postgres://platform:platform_dev_password@postgres:5432/platform?sslmode=disable"
+      
+      # Service configuration
+      PORT: "8081"
+      SERVICE_NAME: "application-service"
+      
+      # Development flags
+      DEBUG: "true"
+      LOG_LEVEL: "debug"
+      ENVIRONMENT: "development"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - platform
+    profiles:
+      - services
+
+  # Team Service - Team CRUD operations
+  team-service:
+    build:
+      context: .
+      dockerfile: cmd/team-service/Dockerfile
+    ports:
+      - "8082:8082"
+    environment:
+      # Database configuration
+      DATABASE_URL: "postgres://platform:platform_dev_password@postgres:5432/platform?sslmode=disable"
+      
+      # Service configuration
+      PORT: "8082"
+      SERVICE_NAME: "team-service"
+      
+      # Development flags
+      DEBUG: "true"
+      LOG_LEVEL: "debug"
+      ENVIRONMENT: "development"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - platform
+    profiles:
+      - services
+
+  # GitHub Provider - Git repository management
+  github-provider:
+    build:
+      context: .
+      dockerfile: cmd/github-provider/Dockerfile
+    ports:
+      - "8083:8083"
+    environment:
+      # Database configuration
+      DATABASE_URL: "postgres://platform:platform_dev_password@postgres:5432/platform?sslmode=disable"
+      
+      # GitHub configuration (will be configured via UI/API)
+      GITHUB_APP_ID: ""
+      GITHUB_APP_PRIVATE_KEY: ""
+      GITHUB_WEBHOOK_SECRET: "dev_webhook_secret"
+      
+      # Service configuration
+      PORT: "8083"
+      SERVICE_NAME: "github-provider"
+      
+      # Development flags  
+      DEBUG: "true"
+      LOG_LEVEL: "debug"
+      ENVIRONMENT: "development"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - platform
+    profiles:
+      - services
+
+  # Frontend Development Server
+  web-dev:
+    image: node:18-alpine
+    working_dir: /app
+    command: sh -c "npm install && npm run dev"
+    ports:
+      - "5173:5173"  # Vite dev server
+    volumes:
+      - ./web:/app
+      - web_node_modules:/app/node_modules
+    environment:
+      VITE_API_BASE_URL: "http://localhost:8080/api/v1"
+      VITE_WS_URL: "ws://localhost:8080/ws"
+    depends_on:
+      - api-gateway
+    networks:
+      - platform
+    profiles:
+      - web
+
+  # Database migrations runner
+  migrate:
+    image: migrate/migrate:latest
+    volumes:
+      - ./migrations:/migrations
+    command: [
+      "-path", "/migrations",
+      "-database", "postgres://platform:platform_dev_password@postgres:5432/platform?sslmode=disable",
+      "up"
+    ]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - platform
+    profiles:
+      - migrate
+
+  # Development tools container
+  dev-tools:
+    image: golang:1.21-alpine
+    working_dir: /app
+    volumes:
+      - .:/app
+      - go_mod_cache:/go/pkg/mod
+    command: ["tail", "-f", "/dev/null"]  # Keep container running
+    environment:
+      DATABASE_URL: "postgres://platform:platform_dev_password@postgres:5432/platform?sslmode=disable"
+      REDIS_URL: "redis://:redis_dev_password@redis:6379/0"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - platform
+    profiles:
+      - dev
+
+networks:
+  platform:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  minio_data:
+    driver: local
+  web_node_modules:
+    driver: local
+  go_mod_cache:
+    driver: local
