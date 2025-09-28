@@ -1,0 +1,12 @@
+{
+    "servers": {
+		"projectflow": {
+			"command": "/Users/vanilla/git/aykay76/projectflow/build/mcp-server",
+			"args": [],
+			"env": {
+				"DATA_DIR": "/Users/vanilla/git/aykay76/projectflow/data"
+			},
+			"type": "stdio"
+		},
+    }
+}

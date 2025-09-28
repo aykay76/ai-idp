@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -14,6 +13,7 @@ import (
 
 	"github.com/aykay76/ai-idp/internal/config"
 	"github.com/aykay76/ai-idp/internal/database"
+	"github.com/aykay76/ai-idp/internal/logger"
 )
 
 // Server wraps the HTTP server with database and utilities
@@ -201,7 +201,7 @@ func (s *Server) readinessWithDBHandler(w http.ResponseWriter, r *http.Request) 
 
 // Middleware implementations
 
-// LoggingMiddleware logs HTTP requests
+// LoggingMiddleware logs HTTP requests using structured logging
 func LoggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
@@ -209,19 +209,36 @@ func LoggingMiddleware(next http.Handler) http.Handler {
 		// Create a custom response writer to capture status code
 		rw := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
 
+		// Extract request ID if present
+		ctx := r.Context()
+		if requestID := r.Header.Get("X-Request-ID"); requestID != "" {
+			ctx = context.WithValue(ctx, logger.FieldRequestID, requestID)
+			r = r.WithContext(ctx)
+		}
+
 		next.ServeHTTP(rw, r)
 
 		duration := time.Since(start)
-		log.Printf("[%s] %s %s %d %v", r.Method, r.URL.Path, r.RemoteAddr, rw.statusCode, duration)
+
+		// Log with structured fields
+		logger.WithContext(ctx).
+			WithHTTP(r.Method, r.URL.Path, rw.statusCode).
+			WithDuration(duration).
+			WithField("remote_addr", r.RemoteAddr).
+			Info("HTTP request completed")
 	})
 }
 
-// RecoveryMiddleware recovers from panics
+// RecoveryMiddleware recovers from panics with structured logging
 func RecoveryMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if err := recover(); err != nil {
-				log.Printf("Panic recovered: %v", err)
+				logger.WithContext(r.Context()).
+					WithHTTP(r.Method, r.URL.Path, http.StatusInternalServerError).
+					WithField("panic", fmt.Sprintf("%v", err)).
+					Error("Panic recovered in HTTP handler")
+
 				RespondWithError(w, http.StatusInternalServerError,
 					fmt.Errorf("internal server error"), "Internal server error")
 			}
@@ -286,7 +303,9 @@ func RespondWithJSON(w http.ResponseWriter, code int, data interface{}) {
 	w.WriteHeader(code)
 
 	if err := json.NewEncoder(w).Encode(data); err != nil {
-		log.Printf("Error encoding JSON response: %v", err)
+		logger.WithError(err).
+			WithField("response_code", code).
+			Error("Failed to encode JSON response")
 	}
 }
 
