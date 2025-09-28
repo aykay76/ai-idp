@@ -22,6 +22,11 @@ func main() {
 	// Load configuration
 	config := server.LoadConfigFromEnv("team-service", "8082")
 
+	// Validate configuration
+	if err := config.Validate(); err != nil {
+		log.Fatalf("Configuration validation failed: %v", err)
+	}
+
 	// Create resource template
 	template := server.NewResourceTemplate("team-service", "teams", config)
 
@@ -68,9 +73,13 @@ func main() {
 	// Load configuration
 	config := server.LoadConfigFromEnv("github-provider", "8083")
 
-	// Add GitHub-specific config
-	config.GitHubAppID = getEnv("GITHUB_APP_ID", "")
-	config.GitHubPrivateKey = getEnv("GITHUB_PRIVATE_KEY", "")
+	// Validate configuration
+	if err := config.Validate(); err != nil {
+		log.Fatalf("Configuration validation failed: %v", err)
+	}
+
+	// GitHub-specific config is now loaded automatically from env vars
+	// GITHUB_APP_ID and GITHUB_PRIVATE_KEY are in config.GitHub.*
 
 	// Create service template (not resource template since it's not CRUD)
 	template := server.NewServiceTemplate("github-provider", "1.0.0", config)

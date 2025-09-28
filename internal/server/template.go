@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"os"
 	"strconv"
 	"time"
 
+	"github.com/aykay76/ai-idp/internal/config"
 	"github.com/google/uuid"
 )
 
@@ -20,9 +20,9 @@ type ServiceTemplate struct {
 }
 
 // NewServiceTemplate creates a new service template
-func NewServiceTemplate(name, version string, config *Config) *ServiceTemplate {
-	config.ServiceName = name
-	server := NewServer(config)
+func NewServiceTemplate(name, version string, cfg *config.Config) *ServiceTemplate {
+	cfg.ServiceName = name
+	server := NewServer(cfg)
 
 	template := &ServiceTemplate{
 		Server:  server,
@@ -293,8 +293,8 @@ type ResourceTemplate struct {
 }
 
 // NewResourceTemplate creates a template for managing a specific resource type
-func NewResourceTemplate(serviceName, resourceName string, config *Config) *ResourceTemplate {
-	template := NewServiceTemplate(serviceName, "1.0.0", config)
+func NewResourceTemplate(serviceName, resourceName string, cfg *config.Config) *ResourceTemplate {
+	template := NewServiceTemplate(serviceName, "1.0.0", cfg)
 
 	return &ResourceTemplate{
 		ServiceTemplate: template,
@@ -310,26 +310,9 @@ func (rt *ResourceTemplate) RegisterResourceHandlers(handlers *CRUDHandlers) {
 
 // Helper functions
 
-// LoadConfigFromEnv loads configuration from environment variables
-func LoadConfigFromEnv(serviceName, defaultPort string) *Config {
-	return &Config{
-		Port:            getEnv("PORT", defaultPort),
-		ServiceName:     getEnv("SERVICE_NAME", serviceName),
-		Environment:     getEnv("ENVIRONMENT", "development"),
-		Debug:           getEnv("DEBUG", "false") == "true",
-		DatabaseURL:     getEnv("DATABASE_URL", "postgres://platform:platform_dev_password@localhost:5432/platform?sslmode=disable"),
-		RedisURL:        getEnv("REDIS_URL", "redis://:redis_dev_password@localhost:6379/0"),
-		JWTSecret:       getEnv("JWT_SECRET", "dev_jwt_secret_change_in_production"),
-		ShutdownTimeout: 30 * time.Second,
-	}
-}
-
-// getEnv gets environment variable with fallback
-func getEnv(key, defaultValue string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
-	}
-	return defaultValue
+// LoadConfigFromEnv loads configuration from environment variables using the main config system
+func LoadConfigFromEnv(serviceName, defaultPort string) *config.Config {
+	return config.LoadWithDefaults(serviceName, defaultPort)
 }
 
 // BuildURL builds a URL with query parameters

@@ -12,24 +12,13 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/aykay76/ai-idp/internal/config"
 	"github.com/aykay76/ai-idp/internal/database"
 )
 
-// Config holds server configuration
-type Config struct {
-	Port            string
-	ServiceName     string
-	Environment     string
-	Debug           bool
-	DatabaseURL     string
-	RedisURL        string
-	JWTSecret       string
-	ShutdownTimeout time.Duration
-}
-
 // Server wraps the HTTP server with database and utilities
 type Server struct {
-	config     *Config
+	config     *config.Config
 	mux        *http.ServeMux
 	database   *database.Pool
 	server     *http.Server
@@ -40,38 +29,16 @@ type Server struct {
 type Middleware func(http.Handler) http.Handler
 
 // NewServer creates a new server instance
-func NewServer(config *Config) *Server {
-	mux := http.NewServeMux()
-
-	server := &Server{
-		config:     config,
-		mux:        mux,
-		middleware: make([]Middleware, 0),
+func NewServer(cfg *config.Config) *Server {
+	return &Server{
+		mux:    http.NewServeMux(),
+		config: cfg,
 	}
-
-	// Add default middleware
-	server.Use(LoggingMiddleware)
-	server.Use(RecoveryMiddleware)
-
-	// CORS middleware for development
-	if config.Environment != "production" {
-		server.Use(CORSMiddleware([]string{
-			"http://localhost:3000",
-			"http://localhost:5173",
-			"http://localhost:8080",
-		}))
-	}
-
-	// Add default health endpoints
-	server.HandleFunc("GET /health", server.healthHandler)
-	server.HandleFunc("GET /readiness", server.readinessHandler)
-
-	return server
 }
 
 // SetupDatabase initializes the database connection
 func (s *Server) SetupDatabase(ctx context.Context) error {
-	dbConfig := database.DefaultConfig(s.config.DatabaseURL)
+	dbConfig := database.DefaultConfig(s.config.Database.URL)
 
 	var err error
 	s.database, err = database.NewPool(ctx, dbConfig)
@@ -114,7 +81,7 @@ func (s *Server) Start() error {
 	}
 
 	s.server = &http.Server{
-		Addr:         ":" + s.config.Port,
+		Addr:         ":" + s.config.Server.Port,
 		Handler:      finalHandler,
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
@@ -122,7 +89,7 @@ func (s *Server) Start() error {
 	}
 
 	fmt.Printf("🚀 %s starting on port %s (env: %s)\n",
-		s.config.ServiceName, s.config.Port, s.config.Environment)
+		s.config.ServiceName, s.config.Server.Port, s.config.Environment)
 
 	return s.server.ListenAndServe()
 }
@@ -168,7 +135,7 @@ func (s *Server) Run(ctx context.Context) error {
 	}
 
 	// Graceful shutdown with timeout
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), s.config.ShutdownTimeout)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), s.config.Server.ShutdownTimeout)
 	defer cancel()
 
 	return s.Stop(shutdownCtx)

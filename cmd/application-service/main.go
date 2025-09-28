@@ -12,9 +12,9 @@ func main() {
 	// Load configuration from environment
 	config := server.LoadConfigFromEnv("application-service", "8081")
 
-	// Validate required configuration
-	if config.DatabaseURL == "" {
-		log.Fatal("DATABASE_URL is required")
+	// Validate configuration
+	if err := config.Validate(); err != nil {
+		log.Fatalf("Configuration validation failed: %v", err)
 	}
 
 	// Create resource template for applications
