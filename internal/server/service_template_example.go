@@ -12,8 +12,8 @@ package main
 
 import (
 	"context"
-	"log"
 
+	"github.com/aykay76/ai-idp/internal/logger"
 	"github.com/aykay76/ai-idp/internal/server"
 	"github.com/aykay76/ai-idp/internal/teams" // Your team service package
 )
