@@ -12,12 +12,12 @@ import (
 
 // Handlers provides HTTP handlers for team resources using native Go HTTP
 type Handlers struct {
-	service *Service
+	service TeamService
 	logger  *logger.Logger
 }
 
 // NewHandlers creates new team handlers
-func NewHandlers(service *Service, appLogger *logger.Logger) *Handlers {
+func NewHandlers(service TeamService, appLogger *logger.Logger) *Handlers {
 	return &Handlers{
 		service: service,
 		logger:  appLogger,

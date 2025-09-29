@@ -24,6 +24,9 @@ type Service struct {
 	db *database.Pool
 }
 
+// Compile-time check that Service implements TeamService
+var _ TeamService = (*Service)(nil)
+
 // NewService creates a new team service
 func NewService(db *database.Pool) *Service {
 	return &Service{db: db}
