@@ -1,0 +1,15 @@
+- Use Projectflow MCP when discussing project management, user stories, tasks etc.
+- Use epics for features with user stories unde them and tasks for individual work items. Work items should be SMART.
+- Use third party libraries as little as possible.
+- Ensure all functions support observability; logging, metrics and tracing.
+- After every task, push the changed files to a new branch and create a pull request.
+- Ensure all code is properly formatted and linted.
+- Ensure all code is properly documented with comments and docstrings.
+- Ensure all code is properly tested with unit tests and integration tests.
+- Ensure all code follows best practices and design patterns.
+- Ensure all code is secure and follows security best practices.
+- Ensure all code is performant and follows performance best practices.
+- Ensure all code is maintainable and follows maintainability best practices.
+- Ensure all code is scalable and follows scalability best practices.
+- Use podman, not Docker, for containerisation.
+- Make one small change at a time. If you notice something else that needs changing, make a note of it and create a new task for it.

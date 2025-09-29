@@ -1,328 +1,305 @@
 package applications
 
 import (
-	"fmt"
+	"encoding/json"
 	"net/http"
-	"strings"
+	"strconv"
+	"time"
 
-	"github.com/aykay76/ai-idp/internal/server"
-	"github.com/go-playground/validator/v10"
+	"github.com/aykay76/ai-idp/internal/logger"
+	"github.com/google/uuid"
 )
 
-// ApplicationHandlers provides HTTP handlers for application resources
-type ApplicationHandlers struct {
-	service  *Service
-	validate *validator.Validate
+// Handlers provides HTTP handlers for application resources using native Go HTTP
+type Handlers struct {
+	service *Service
+	logger  *logger.Logger
 }
 
-// NewApplicationHandlers creates new application handlers
-func NewApplicationHandlers(service *Service) *ApplicationHandlers {
-	return &ApplicationHandlers{
-		service:  service,
-		validate: validator.New(),
+// NewHandlers creates new application handlers
+func NewHandlers(service *Service, appLogger *logger.Logger) *Handlers {
+	return &Handlers{
+		service: service,
+		logger:  appLogger,
 	}
 }
 
-// GetCRUDHandlers returns the CRUD handlers for applications
-func (h *ApplicationHandlers) GetCRUDHandlers() *server.CRUDHandlers {
-	return &server.CRUDHandlers{
-		Create: server.WithTenantValidation(h.CreateApplication),
-		List:   server.WithTenantValidation(h.ListApplications),
-		Get:    server.WithTenantValidation(h.GetApplication),
-		Update: server.WithTenantValidation(h.UpdateApplication),
-		Delete: server.WithTenantValidation(h.DeleteApplication),
-	}
+// ListApplicationsResponse represents the response for listing applications
+type ListApplicationsResponse struct {
+	Applications []Application  `json:"applications"`
+	Pagination   PaginationMeta `json:"pagination"`
 }
 
-// CreateApplication handles POST /applications
-func (h *ApplicationHandlers) CreateApplication(w http.ResponseWriter, r *http.Request) {
-	// Get tenant context
-	tenantCtx, err := server.GetTenantFromContext(r)
-	if err != nil {
-		server.RespondWithError(w, http.StatusBadRequest, err, "Invalid tenant context")
-		return
-	}
+// PaginationMeta contains pagination metadata
+type PaginationMeta struct {
+	Limit  int `json:"limit"`
+	Offset int `json:"offset"`
+	Total  int `json:"total"`
+}
+
+// ErrorResponse represents an error response
+type ErrorResponse struct {
+	Error   string    `json:"error"`
+	Message string    `json:"message"`
+	Code    string    `json:"code,omitempty"`
+	Time    time.Time `json:"timestamp"`
+}
+
+// CreateApplication handles POST /api/v1/applications
+func (h *Handlers) CreateApplication(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// For now, we'll use a hardcoded tenant ID until we implement proper tenant middleware
+	tenantID := uuid.MustParse("00000000-0000-0000-0000-000000000001") // Default tenant
 
 	// Parse request body
 	var req CreateApplicationRequest
-	if err := server.ParseJSONBody(r, &req); err != nil {
-		server.RespondWithValidationError(w, err)
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.respondWithError(w, http.StatusBadRequest, "Invalid JSON", err)
 		return
 	}
 
-	// Validate request
-	if err := h.validate.Struct(&req); err != nil {
-		server.RespondWithValidationError(w, err)
+	// Basic validation
+	if req.Name == "" {
+		h.respondWithError(w, http.StatusBadRequest, "Name is required", nil)
+		return
+	}
+	if req.DisplayName == "" {
+		h.respondWithError(w, http.StatusBadRequest, "Display name is required", nil)
 		return
 	}
 
 	// Create application
-	app, err := h.service.CreateApplication(r.Context(), tenantCtx.TenantID, &req, tenantCtx.UserID)
+	app, err := h.service.CreateApplication(ctx, tenantID, &req)
 	if err != nil {
-		if strings.Contains(err.Error(), "duplicate key") {
-			server.RespondWithError(w, http.StatusConflict, err, "Application name already exists")
-			return
-		}
-		server.RespondWithInternalError(w, err)
+		h.logger.WithFields(logger.LogFields{
+			logger.FieldError: err.Error(),
+			"name":            req.Name,
+		}).Error("Failed to create application")
+		h.respondWithError(w, http.StatusInternalServerError, "Failed to create application", err)
 		return
 	}
 
-	server.RespondCreated(w, app)
+	h.logger.WithFields(logger.LogFields{
+		"application_id": app.ID.String(),
+		"name":           app.Name,
+	}).Info("Application created successfully")
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(app)
 }
 
-// ListApplications handles GET /applications
-func (h *ApplicationHandlers) ListApplications(w http.ResponseWriter, r *http.Request) {
-	// Get tenant context
-	tenantCtx, err := server.GetTenantFromContext(r)
-	if err != nil {
-		server.RespondWithError(w, http.StatusBadRequest, err, "Invalid tenant context")
-		return
-	}
+// ListApplications handles GET /api/v1/applications
+func (h *Handlers) ListApplications(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// For now, we'll use a hardcoded tenant ID until we implement proper tenant middleware
+	tenantID := uuid.MustParse("00000000-0000-0000-0000-000000000001") // Default tenant
 
 	// Parse pagination parameters
-	pagination, err := server.ParsePaginationParams(r)
-	if err != nil {
-		server.RespondWithError(w, http.StatusBadRequest, err, "Invalid pagination parameters")
-		return
+	limit := h.parseQueryInt(r, "limit", 20)
+	if limit > 100 {
+		limit = 100 // Max limit
 	}
+	offset := h.parseQueryInt(r, "offset", 0)
 
 	// Parse filter parameters
-	filters := server.ParseFilterParams(r)
+	teamName := r.URL.Query().Get("team_name")
+	lifecycle := r.URL.Query().Get("lifecycle")
+	status := r.URL.Query().Get("status")
 
-	// Build list request
-	req := &ListApplicationsRequest{
-		TenantID:  tenantCtx.TenantID,
-		TeamName:  filters.TeamName,
-		Lifecycle: server.QueryParam(r, "lifecycle"),
-		Status:    filters.Status,
-		Limit:     pagination.Limit,
-		Offset:    pagination.Offset,
+	// Create list request
+	listReq := &ListApplicationsRequest{
+		TenantID:  tenantID,
+		TeamName:  teamName,
+		Lifecycle: lifecycle,
+		Status:    status,
+		Limit:     limit,
+		Offset:    offset,
 	}
 
-	// List applications
-	applications, err := h.service.ListApplications(r.Context(), req)
+	// Get applications
+	apps, total, err := h.service.ListApplications(ctx, listReq)
 	if err != nil {
-		server.RespondWithInternalError(w, err)
+		h.logger.WithFields(logger.LogFields{
+			logger.FieldError: err.Error(),
+		}).Error("Failed to list applications")
+		h.respondWithError(w, http.StatusInternalServerError, "Failed to list applications", err)
 		return
 	}
 
-	server.RespondWithData(w, map[string]interface{}{
-		"applications": applications,
-		"count":        len(applications),
-		"filters": map[string]interface{}{
-			"team_name": req.TeamName,
-			"lifecycle": req.Lifecycle,
-			"status":    req.Status,
-			"limit":     req.Limit,
-			"offset":    req.Offset,
+	response := ListApplicationsResponse{
+		Applications: apps,
+		Pagination: PaginationMeta{
+			Limit:  limit,
+			Offset: offset,
+			Total:  total,
 		},
-	})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(response)
 }
 
-// GetApplication handles GET /applications/{id}
-func (h *ApplicationHandlers) GetApplication(w http.ResponseWriter, r *http.Request) {
-	// Get tenant context
-	tenantCtx, err := server.GetTenantFromContext(r)
-	if err != nil {
-		server.RespondWithError(w, http.StatusBadRequest, err, "Invalid tenant context")
+// GetApplication handles GET /api/v1/applications/{id}
+func (h *Handlers) GetApplication(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// Extract ID from path
+	idStr := r.PathValue("id")
+	if idStr == "" {
+		h.respondWithError(w, http.StatusBadRequest, "Application ID is required", nil)
 		return
 	}
 
-	// Extract application ID from path
-	applicationIDStr := server.PathParam(r, "id")
-	applicationID, err := server.ParseUUIDParam(applicationIDStr, "application ID")
+	id, err := uuid.Parse(idStr)
 	if err != nil {
-		server.RespondWithError(w, http.StatusBadRequest, err, "Invalid application ID")
+		h.respondWithError(w, http.StatusBadRequest, "Invalid application ID format", err)
 		return
 	}
+
+	// For now, we'll use a hardcoded tenant ID until we implement proper tenant middleware
+	tenantID := uuid.MustParse("00000000-0000-0000-0000-000000000001") // Default tenant
 
 	// Get application
-	app, err := h.service.GetApplication(r.Context(), tenantCtx.TenantID, applicationID)
+	app, err := h.service.GetApplication(ctx, tenantID, id)
 	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
-			server.RespondWithNotFound(w, "Application")
+		if err.Error() == "application not found" {
+			h.respondWithError(w, http.StatusNotFound, "Application not found", err)
 			return
 		}
-		server.RespondWithInternalError(w, err)
+		h.logger.WithFields(logger.LogFields{
+			logger.FieldError: err.Error(),
+			"application_id":  id.String(),
+		}).Error("Failed to get application")
+		h.respondWithError(w, http.StatusInternalServerError, "Failed to get application", err)
 		return
 	}
 
-	server.RespondWithData(w, app)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(app)
 }
 
-// UpdateApplication handles PUT /applications/{id}
-func (h *ApplicationHandlers) UpdateApplication(w http.ResponseWriter, r *http.Request) {
-	// Get tenant context
-	tenantCtx, err := server.GetTenantFromContext(r)
-	if err != nil {
-		server.RespondWithError(w, http.StatusBadRequest, err, "Invalid tenant context")
+// UpdateApplication handles PUT /api/v1/applications/{id}
+func (h *Handlers) UpdateApplication(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// Extract ID from path
+	idStr := r.PathValue("id")
+	if idStr == "" {
+		h.respondWithError(w, http.StatusBadRequest, "Application ID is required", nil)
 		return
 	}
 
-	// Extract application ID from path
-	applicationIDStr := server.PathParam(r, "id")
-	applicationID, err := server.ParseUUIDParam(applicationIDStr, "application ID")
+	id, err := uuid.Parse(idStr)
 	if err != nil {
-		server.RespondWithError(w, http.StatusBadRequest, err, "Invalid application ID")
+		h.respondWithError(w, http.StatusBadRequest, "Invalid application ID format", err)
 		return
 	}
 
 	// Parse request body
 	var req UpdateApplicationRequest
-	if err := server.ParseJSONBody(r, &req); err != nil {
-		server.RespondWithValidationError(w, err)
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.respondWithError(w, http.StatusBadRequest, "Invalid JSON", err)
 		return
 	}
 
-	// Validate request
-	if err := h.validate.Struct(&req); err != nil {
-		server.RespondWithValidationError(w, err)
-		return
-	}
+	// For now, we'll use a hardcoded tenant ID until we implement proper tenant middleware
+	tenantID := uuid.MustParse("00000000-0000-0000-0000-000000000001") // Default tenant
 
 	// Update application
-	app, err := h.service.UpdateApplication(r.Context(), tenantCtx.TenantID, applicationID, &req, tenantCtx.UserID)
+	app, err := h.service.UpdateApplication(ctx, tenantID, id, &req)
 	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
-			server.RespondWithNotFound(w, "Application")
+		if err.Error() == "application not found" {
+			h.respondWithError(w, http.StatusNotFound, "Application not found", err)
 			return
 		}
-		if strings.Contains(err.Error(), "no fields to update") {
-			server.RespondWithError(w, http.StatusBadRequest, err, "No fields provided for update")
-			return
-		}
-		server.RespondWithInternalError(w, err)
+		h.logger.WithFields(logger.LogFields{
+			logger.FieldError: err.Error(),
+			"application_id":  id.String(),
+		}).Error("Failed to update application")
+		h.respondWithError(w, http.StatusInternalServerError, "Failed to update application", err)
 		return
 	}
 
-	server.RespondWithData(w, app)
+	h.logger.WithFields(logger.LogFields{
+		"application_id": app.ID.String(),
+		"name":           app.Name,
+	}).Info("Application updated successfully")
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(app)
 }
 
-// DeleteApplication handles DELETE /applications/{id}
-func (h *ApplicationHandlers) DeleteApplication(w http.ResponseWriter, r *http.Request) {
-	// Get tenant context
-	tenantCtx, err := server.GetTenantFromContext(r)
-	if err != nil {
-		server.RespondWithError(w, http.StatusBadRequest, err, "Invalid tenant context")
+// DeleteApplication handles DELETE /api/v1/applications/{id}
+func (h *Handlers) DeleteApplication(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// Extract ID from path
+	idStr := r.PathValue("id")
+	if idStr == "" {
+		h.respondWithError(w, http.StatusBadRequest, "Application ID is required", nil)
 		return
 	}
 
-	// Extract application ID from path
-	applicationIDStr := server.PathParam(r, "id")
-	applicationID, err := server.ParseUUIDParam(applicationIDStr, "application ID")
+	id, err := uuid.Parse(idStr)
 	if err != nil {
-		server.RespondWithError(w, http.StatusBadRequest, err, "Invalid application ID")
+		h.respondWithError(w, http.StatusBadRequest, "Invalid application ID format", err)
 		return
 	}
+
+	// For now, we'll use a hardcoded tenant ID until we implement proper tenant middleware
+	tenantID := uuid.MustParse("00000000-0000-0000-0000-000000000001") // Default tenant
 
 	// Delete application
-	err = h.service.DeleteApplication(r.Context(), tenantCtx.TenantID, applicationID, tenantCtx.UserID)
+	err = h.service.DeleteApplication(ctx, tenantID, id)
 	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
-			server.RespondWithNotFound(w, "Application")
+		if err.Error() == "application not found" {
+			h.respondWithError(w, http.StatusNotFound, "Application not found", err)
 			return
 		}
-		server.RespondWithInternalError(w, err)
+		h.logger.WithFields(logger.LogFields{
+			logger.FieldError: err.Error(),
+			"application_id":  id.String(),
+		}).Error("Failed to delete application")
+		h.respondWithError(w, http.StatusInternalServerError, "Failed to delete application", err)
 		return
 	}
 
-	server.RespondWithMessage(w, "Application deleted successfully")
+	h.logger.WithFields(logger.LogFields{
+		"application_id": id.String(),
+	}).Info("Application deleted successfully")
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
-// Additional helper handlers
+// Helper methods
 
-// GetApplicationsByTeam handles GET /applications/by-team/{teamName}
-func (h *ApplicationHandlers) GetApplicationsByTeam(w http.ResponseWriter, r *http.Request) {
-	// Get tenant context
-	tenantCtx, err := server.GetTenantFromContext(r)
-	if err != nil {
-		server.RespondWithError(w, http.StatusBadRequest, err, "Invalid tenant context")
-		return
+func (h *Handlers) parseQueryInt(r *http.Request, key string, defaultValue int) int {
+	if value := r.URL.Query().Get(key); value != "" {
+		if parsed, err := strconv.Atoi(value); err == nil {
+			return parsed
+		}
 	}
-
-	// Extract team name from path
-	teamName := server.PathParam(r, "teamName")
-	if teamName == "" {
-		server.RespondWithError(w, http.StatusBadRequest,
-			fmt.Errorf("missing team name"), "Team name is required")
-		return
-	}
-
-	// Parse pagination parameters
-	pagination, err := server.ParsePaginationParams(r)
-	if err != nil {
-		server.RespondWithError(w, http.StatusBadRequest, err, "Invalid pagination parameters")
-		return
-	}
-
-	// Build list request
-	req := &ListApplicationsRequest{
-		TenantID: tenantCtx.TenantID,
-		TeamName: teamName,
-		Limit:    pagination.Limit,
-		Offset:   pagination.Offset,
-	}
-
-	// List applications for team
-	applications, err := h.service.ListApplications(r.Context(), req)
-	if err != nil {
-		server.RespondWithInternalError(w, err)
-		return
-	}
-
-	server.RespondWithData(w, map[string]interface{}{
-		"applications": applications,
-		"team_name":    teamName,
-		"count":        len(applications),
-	})
+	return defaultValue
 }
 
-// GetApplicationStats handles GET /applications/stats
-func (h *ApplicationHandlers) GetApplicationStats(w http.ResponseWriter, r *http.Request) {
-	// Get tenant context
-	tenantCtx, err := server.GetTenantFromContext(r)
+func (h *Handlers) respondWithError(w http.ResponseWriter, status int, message string, err error) {
+	response := ErrorResponse{
+		Error:   message,
+		Message: message,
+		Time:    time.Now().UTC(),
+	}
+
 	if err != nil {
-		server.RespondWithError(w, http.StatusBadRequest, err, "Invalid tenant context")
-		return
+		response.Message = err.Error()
 	}
 
-	// Get all applications for stats
-	req := &ListApplicationsRequest{
-		TenantID: tenantCtx.TenantID,
-		Limit:    1000, // Large limit to get all applications
-		Offset:   0,
-	}
-
-	applications, err := h.service.ListApplications(r.Context(), req)
-	if err != nil {
-		server.RespondWithInternalError(w, err)
-		return
-	}
-
-	// Calculate statistics
-	stats := calculateApplicationStats(applications)
-
-	server.RespondWithData(w, stats)
-}
-
-// calculateApplicationStats calculates statistics for applications
-func calculateApplicationStats(applications []*Application) map[string]interface{} {
-	stats := map[string]interface{}{
-		"total":        len(applications),
-		"by_lifecycle": make(map[string]int),
-		"by_status":    make(map[string]int),
-		"by_team":      make(map[string]int),
-	}
-
-	lifecycleStats := stats["by_lifecycle"].(map[string]int)
-	statusStats := stats["by_status"].(map[string]int)
-	teamStats := stats["by_team"].(map[string]int)
-
-	for _, app := range applications {
-		lifecycleStats[app.Lifecycle]++
-		statusStats[app.Status]++
-		teamStats[app.TeamName]++
-	}
-
-	return stats
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(response)
 }
