@@ -1,5 +1,7 @@
 - Use Projectflow MCP when discussing project management, user stories, tasks etc.
 - Use epics for features with user stories unde them and tasks for individual work items. Work items should be SMART.
+- When starting a task ensure it is marked as "in progress" in Projectflow MCP.
+- When completing a task ensure it is marked as "done" in Projectflow MCP.
 - Use third party libraries as little as possible.
 - Ensure all functions support observability; logging, metrics and tracing.
 - After every task, push the changed files to a new branch and create a pull request.
