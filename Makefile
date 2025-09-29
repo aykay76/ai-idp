@@ -115,7 +115,6 @@ build: ## Build all binaries
 	@go build -o bin/api-gateway ./cmd/api-gateway
 	@go build -o bin/application-service ./cmd/application-service  
 	@go build -o bin/team-service ./cmd/team-service
-	@go build -o bin/github-provider ./cmd/github-provider
 	@echo "✅ Binaries built in ./bin/"
 
 podman-build: ## Build all Podman images
