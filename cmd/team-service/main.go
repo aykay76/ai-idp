@@ -10,9 +10,10 @@ import (
 	"time"
 
 	"github.com/aykay76/ai-idp/internal/config"
+	"github.com/aykay76/ai-idp/internal/database"
 	"github.com/aykay76/ai-idp/internal/logger"
 	"github.com/aykay76/ai-idp/internal/middleware"
-	"github.com/aykay76/ai-idp/internal/proxy"
+	"github.com/aykay76/ai-idp/internal/teams"
 )
 
 // HealthResponse represents the health check response
@@ -23,24 +24,32 @@ type HealthResponse struct {
 	Version   string    `json:"version,omitempty"`
 }
 
-// getEnvWithDefault gets an environment variable or returns a default value
-func getEnvWithDefault(key, defaultValue string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
-	}
-	return defaultValue
-}
-
 func main() {
 	// Load configuration
-	cfg := config.Load()
+	cfg := config.LoadWithDefaults("team-service", "8083")
 
 	// Initialize logger
 	appLogger := logger.New(cfg.Logging.Level, cfg.Logging.Format)
 	appLogger.WithFields(logger.LogFields{
-		logger.FieldComponent: "api-gateway",
+		logger.FieldComponent: "team-service",
 		"port":                cfg.Server.Port,
-	}).Info("Starting API Gateway")
+	}).Info("Starting Team Service")
+
+	// Setup database connection
+	ctx := context.Background()
+	dbConfig := database.DefaultConfig(cfg.Database.URL)
+	dbPool, err := database.NewPool(ctx, dbConfig)
+	if err != nil {
+		appLogger.WithFields(logger.LogFields{
+			logger.FieldComponent: "team-service",
+			logger.FieldError:     err.Error(),
+		}).Fatal("Failed to connect to database")
+	}
+	defer dbPool.Close()
+
+	// Initialize team service
+	teamService := teams.NewService(dbPool)
+	teamHandlers := teams.NewHandlers(teamService, appLogger)
 
 	// Create HTTP server mux
 	mux := http.NewServeMux()
@@ -50,7 +59,7 @@ func main() {
 		response := HealthResponse{
 			Status:    "healthy",
 			Timestamp: time.Now().UTC(),
-			Service:   "ai-idp-api-gateway",
+			Service:   "ai-idp-team-service",
 			Version:   os.Getenv("VERSION"),
 		}
 
@@ -77,7 +86,7 @@ func main() {
 		response := HealthResponse{
 			Status:    "ready",
 			Timestamp: time.Now().UTC(),
-			Service:   "ai-idp-api-gateway",
+			Service:   "ai-idp-team-service",
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -103,7 +112,7 @@ func main() {
 		response := HealthResponse{
 			Status:    "alive",
 			Timestamp: time.Now().UTC(),
-			Service:   "ai-idp-api-gateway",
+			Service:   "ai-idp-team-service",
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -124,18 +133,12 @@ func main() {
 		}).Debug("Liveness check requested")
 	})
 
-	// Setup proxy configuration
-	proxyConfig := &proxy.ProxyConfig{
-		ApplicationServiceURL: getEnvWithDefault("APPLICATION_SERVICE_URL", "http://localhost:8082"),
-		TeamServiceURL:        getEnvWithDefault("TEAM_SERVICE_URL", "http://localhost:8083"),
-		Logger:               appLogger,
-	}
-	
-	// Create proxy handler
-	proxyHandler := proxy.NewProxyHandler(proxyConfig)
-	
-	// Add proxy routes for API endpoints
-	mux.Handle("/api/", proxyHandler)
+	// Team API endpoints
+	mux.HandleFunc("POST /api/v1/teams", teamHandlers.CreateTeam)
+	mux.HandleFunc("GET /api/v1/teams/{id}", teamHandlers.GetTeam)
+	mux.HandleFunc("PUT /api/v1/teams/{id}", teamHandlers.UpdateTeam)
+	mux.HandleFunc("DELETE /api/v1/teams/{id}", teamHandlers.DeleteTeam)
+	mux.HandleFunc("GET /api/v1/teams", teamHandlers.ListTeams)
 
 	// Apply middleware chain
 	handler := middleware.RequestID(mux)
@@ -153,13 +156,13 @@ func main() {
 	// Start server in a goroutine
 	go func() {
 		appLogger.WithFields(logger.LogFields{
-			logger.FieldComponent: "api-gateway",
+			logger.FieldComponent: "team-service",
 			"address":             server.Addr,
-		}).Info("API Gateway server starting")
+		}).Info("Team Service server starting")
 
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			appLogger.WithFields(logger.LogFields{
-				logger.FieldComponent: "api-gateway",
+				logger.FieldComponent: "team-service",
 				logger.FieldError:     err.Error(),
 			}).Error("Server failed to start")
 			os.Exit(1)
@@ -167,9 +170,9 @@ func main() {
 	}()
 
 	appLogger.WithFields(logger.LogFields{
-		logger.FieldComponent: "api-gateway",
+		logger.FieldComponent: "team-service",
 		"port":                cfg.Server.Port,
-	}).Info("API Gateway server started successfully")
+	}).Info("Team Service server started successfully")
 
 	// Wait for interrupt signal to gracefully shutdown the server
 	quit := make(chan os.Signal, 1)
@@ -177,8 +180,8 @@ func main() {
 	<-quit
 
 	appLogger.WithFields(logger.LogFields{
-		logger.FieldComponent: "api-gateway",
-	}).Info("API Gateway server shutting down")
+		logger.FieldComponent: "team-service",
+	}).Info("Team Service server shutting down")
 
 	// Create a context with timeout for shutdown
 	ctx, cancel := context.WithTimeout(context.Background(), cfg.Server.ShutdownTimeout)
@@ -187,13 +190,13 @@ func main() {
 	// Attempt graceful shutdown
 	if err := server.Shutdown(ctx); err != nil {
 		appLogger.WithFields(logger.LogFields{
-			logger.FieldComponent: "api-gateway",
+			logger.FieldComponent: "team-service",
 			logger.FieldError:     err.Error(),
 		}).Error("Server forced to shutdown")
 		os.Exit(1)
 	}
 
 	appLogger.WithFields(logger.LogFields{
-		logger.FieldComponent: "api-gateway",
-	}).Info("API Gateway server stopped")
+		logger.FieldComponent: "team-service",
+	}).Info("Team Service server stopped")
 }
