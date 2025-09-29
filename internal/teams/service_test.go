@@ -106,13 +106,13 @@ func TestTeamService_CreateTeam(t *testing.T) {
 
 		// Should auto-generate ID
 		assert.NotEqual(t, uuid.Nil, result.ID)
-		
+
 		// Should set default tenant ID
 		assert.NotEqual(t, uuid.Nil, result.TenantID)
-		
+
 		// Should set display name to name if not provided
 		assert.Equal(t, "auto-test-team", result.DisplayName)
-		
+
 		// Should set default created by
 		assert.Equal(t, "system", result.CreatedBy)
 	})
@@ -287,7 +287,7 @@ func TestTeamService_ListTeams(t *testing.T) {
 			teams2, total2, err := service.ListTeams(ctx, 2, 2)
 			require.NoError(t, err)
 			assert.Equal(t, total, total2) // Total should be the same
-			
+
 			// Teams should be different (assuming we have more than 2)
 			if len(teams) > 0 && len(teams2) > 0 {
 				assert.NotEqual(t, teams[0].ID, teams2[0].ID)
@@ -333,7 +333,7 @@ func TestTeamService_UpdateTeam(t *testing.T) {
 		created.DisplayName = "Updated Display Name"
 		created.Description = stringPtr("Updated description")
 		created.Department = stringPtr("Updated Department")
-		
+
 		updated, err := service.UpdateTeam(ctx, created)
 		require.NoError(t, err)
 

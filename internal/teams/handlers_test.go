@@ -77,7 +77,7 @@ func TestHandlers_CreateTeam(t *testing.T) {
 
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/teams", bytes.NewReader(reqBody))
 		req.Header.Set("Content-Type", "application/json")
-		
+
 		rr := httptest.NewRecorder()
 		handlers.CreateTeam(rr, req)
 
@@ -96,7 +96,7 @@ func TestHandlers_CreateTeam(t *testing.T) {
 	t.Run("invalid JSON", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/teams", strings.NewReader("invalid json"))
 		req.Header.Set("Content-Type", "application/json")
-		
+
 		rr := httptest.NewRecorder()
 		handlers.CreateTeam(rr, req)
 
@@ -123,7 +123,7 @@ func TestHandlers_CreateTeam(t *testing.T) {
 
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/teams", bytes.NewReader(reqBody))
 		req.Header.Set("Content-Type", "application/json")
-		
+
 		rr := httptest.NewRecorder()
 		handlers.CreateTeam(rr, req)
 
@@ -156,7 +156,7 @@ func TestHandlers_GetTeam(t *testing.T) {
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/teams/"+teamID.String(), nil)
 		req.SetPathValue("id", teamID.String())
-		
+
 		rr := httptest.NewRecorder()
 		handlers.GetTeam(rr, req)
 
@@ -174,7 +174,7 @@ func TestHandlers_GetTeam(t *testing.T) {
 
 	t.Run("missing team ID", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/teams/", nil)
-		
+
 		rr := httptest.NewRecorder()
 		handlers.GetTeam(rr, req)
 
@@ -190,7 +190,7 @@ func TestHandlers_GetTeam(t *testing.T) {
 	t.Run("invalid team ID format", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/teams/invalid-uuid", nil)
 		req.SetPathValue("id", "invalid-uuid")
-		
+
 		rr := httptest.NewRecorder()
 		handlers.GetTeam(rr, req)
 
@@ -209,7 +209,7 @@ func TestHandlers_GetTeam(t *testing.T) {
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/teams/"+teamID.String(), nil)
 		req.SetPathValue("id", teamID.String())
-		
+
 		rr := httptest.NewRecorder()
 		handlers.GetTeam(rr, req)
 
@@ -247,7 +247,7 @@ func TestHandlers_ListTeams(t *testing.T) {
 		mockService.On("ListTeams", mock.Anything, 50, 0).Return(expectedTeams, 2, nil).Once()
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/teams", nil)
-		
+
 		rr := httptest.NewRecorder()
 		handlers.ListTeams(rr, req)
 
@@ -278,7 +278,7 @@ func TestHandlers_ListTeams(t *testing.T) {
 		mockService.On("ListTeams", mock.Anything, 10, 20).Return(expectedTeams, 25, nil).Once()
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/teams?limit=10&offset=20", nil)
-		
+
 		rr := httptest.NewRecorder()
 		handlers.ListTeams(rr, req)
 
@@ -299,7 +299,7 @@ func TestHandlers_ListTeams(t *testing.T) {
 		mockService.On("ListTeams", mock.Anything, 50, 0).Return([]Team{}, 0, assert.AnError).Once()
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/teams", nil)
-		
+
 		rr := httptest.NewRecorder()
 		handlers.ListTeams(rr, req)
 
@@ -340,7 +340,7 @@ func TestHandlers_UpdateTeam(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPut, "/api/v1/teams/"+teamID.String(), bytes.NewReader(reqBody))
 		req.Header.Set("Content-Type", "application/json")
 		req.SetPathValue("id", teamID.String())
-		
+
 		rr := httptest.NewRecorder()
 		handlers.UpdateTeam(rr, req)
 
@@ -374,7 +374,7 @@ func TestHandlers_UpdateTeam(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPut, "/api/v1/teams/"+teamID.String(), bytes.NewReader(reqBody))
 		req.Header.Set("Content-Type", "application/json")
 		req.SetPathValue("id", teamID.String())
-		
+
 		rr := httptest.NewRecorder()
 		handlers.UpdateTeam(rr, req)
 
@@ -399,7 +399,7 @@ func TestHandlers_DeleteTeam(t *testing.T) {
 
 		req := httptest.NewRequest(http.MethodDelete, "/api/v1/teams/"+teamID.String(), nil)
 		req.SetPathValue("id", teamID.String())
-		
+
 		rr := httptest.NewRecorder()
 		handlers.DeleteTeam(rr, req)
 
@@ -415,7 +415,7 @@ func TestHandlers_DeleteTeam(t *testing.T) {
 
 		req := httptest.NewRequest(http.MethodDelete, "/api/v1/teams/"+teamID.String(), nil)
 		req.SetPathValue("id", teamID.String())
-		
+
 		rr := httptest.NewRecorder()
 		handlers.DeleteTeam(rr, req)
 

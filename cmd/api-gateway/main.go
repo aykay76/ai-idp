@@ -128,12 +128,12 @@ func main() {
 	proxyConfig := &proxy.ProxyConfig{
 		ApplicationServiceURL: getEnvWithDefault("APPLICATION_SERVICE_URL", "http://localhost:8082"),
 		TeamServiceURL:        getEnvWithDefault("TEAM_SERVICE_URL", "http://localhost:8083"),
-		Logger:               appLogger,
+		Logger:                appLogger,
 	}
-	
+
 	// Create proxy handler
 	proxyHandler := proxy.NewProxyHandler(proxyConfig)
-	
+
 	// Add proxy routes for API endpoints
 	mux.Handle("/api/", proxyHandler)
 

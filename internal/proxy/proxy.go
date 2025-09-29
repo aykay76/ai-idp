@@ -14,7 +14,7 @@ import (
 type ProxyConfig struct {
 	ApplicationServiceURL string
 	TeamServiceURL        string
-	Logger               *logger.Logger
+	Logger                *logger.Logger
 }
 
 // ProxyHandler handles proxying requests to backend services
@@ -34,7 +34,7 @@ func (p *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Determine target service based on path
 	var targetURL string
 	var serviceName string
-	
+
 	if strings.HasPrefix(r.URL.Path, "/api/v1/teams") {
 		targetURL = p.config.TeamServiceURL
 		serviceName = "team-service"
@@ -73,7 +73,7 @@ func (p *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		logger.FieldHTTPMethod: r.Method,
 		logger.FieldHTTPPath:   r.URL.Path,
 		"service":              serviceName,
-		"proxy_url":           proxyURL.String(),
+		"proxy_url":            proxyURL.String(),
 	}).Debug("Proxying request")
 
 	// Create proxy request
@@ -115,7 +115,7 @@ func (p *ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		p.config.Logger.WithFields(logger.LogFields{
 			logger.FieldError: err.Error(),
 			"service":         serviceName,
-			"proxy_url":      proxyURL.String(),
+			"proxy_url":       proxyURL.String(),
 		}).Error("Proxy request failed")
 		http.Error(w, "Service Unavailable", http.StatusServiceUnavailable)
 		return
